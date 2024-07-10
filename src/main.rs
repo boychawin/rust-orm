@@ -1,54 +1,36 @@
-use actix_web::{web, App, HttpServer};
-use db::Config;
-// use diesel::r2d2::Pool;
-// use diesel::{
-//     r2d2::{ConnectionManager, Pool},
-//     PgPoolOptions,
-// };
+use actix::SyncArbiter;
+use actix_web::{web::Data, App, HttpServer};
 use dotenv::dotenv;
+use diesel::{
+    r2d2::{ConnectionManager, Pool},
+    PgConnection
+};
+use std::env;
 
-mod db;
-mod messages;
-mod models;
-mod schema;
 mod services;
 mod utils;
+mod messages;
+mod actors;
+mod models;
+mod schema;
+mod insertables;
 
-use services::fetch_users;
-use sqlx::{postgres::PgPoolOptions, Postgres,Pool};
-// use utils::AppState;
-
-pub struct AppState {
-    db: Pool<Postgres>,
-}
+use utils::{get_pool, AppState, DbActor};
+use services::{create_user_article, fetch_user_articles, fetch_users};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
-
-    let config = Config::init();
-
-    let pool = match PgPoolOptions::new()
-        .max_connections(10)
-        .connect(&config.database_url)
-        .await
-    {
-        Ok(pool) => {
-            println!("Connection to the database is successful!");
-            pool
-        }
-        Err(err) => {
-            println!("Failed to connect to the database: {:?}", err);
-            std::process::exit(1);
-        }
-    };
-
-    println!("🧑🏻‍💻 Server started successfully");
-
+    let db_url: String = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let pool: Pool<ConnectionManager<PgConnection>> = get_pool(&db_url);
+    let db_addr = SyncArbiter::start(5, move || DbActor(pool.clone()));
+    
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(AppState { db: pool.clone() }))
+            .app_data(Data::new(AppState { db: db_addr.clone() }))
             .service(fetch_users)
+            .service(fetch_user_articles)
+            .service(create_user_article)
     })
     .bind(("127.0.0.1", 8083))?
     .run()

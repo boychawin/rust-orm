@@ -27,7 +27,32 @@ cargo install diesel_cli_ext
 
 ``` sh
 diesel setup
+# diesel migration generate users
+# diesel migration generate articles
 
+```sql 
+
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  first_name VARCHAR NOT NULL,
+  last_name VARCHAR NOT NULL
+);
+
+CREATE TABLE articles (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR NOT NULL,
+  content TEXT NOT NULL,
+  created_by INT4 REFERENCES users(id),
+  created_on TIMESTAMPTZ DEFAULT NULL
+);
+
+
+
+
+```
+
+
+diesel migration run
 ```
 
 #### This command runs the Diesel setup process, generating initial files for interacting with your database.
